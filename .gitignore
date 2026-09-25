@@ -1,0 +1,5 @@
+.venv/
+__pycache__/
+*.py[cod]
+smart_doorbell_system/access_control.db
+smart_doorbell_system/edge_requests.log
