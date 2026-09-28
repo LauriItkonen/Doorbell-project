@@ -8,6 +8,12 @@ from pathlib import Path
 
 from flask import Flask, jsonify, request
 
+import crypto
+
+DEFAULT_EDGE_CLOUD_KEY_HEX = "02" * 32
+EDGE_CLOUD_KEY = crypto.load_key_from_env("DOORBELL_CLOUD_KEY", DEFAULT_EDGE_CLOUD_KEY_HEX)
+CLOUD_ID = "cloud-service"
+
 app = Flask(__name__)
 DATABASE_PATH = Path(__file__).with_name("access_control.db")
 
@@ -50,9 +56,18 @@ def initialize_database() -> None:
 
 @app.post("/api/cloud/verify-visitor")
 def verify_visitor():
-    """Check authorization, persist the attempt, and return the decision."""
-    payload = request.get_json(silent=True)
-    visitor_name = payload.get("visitor_name", "").strip() if isinstance(payload, dict) else ""
+    """Check authorization, persist the attempt, and return the encrypted decision."""
+    envelope = request.get_json(silent=True)
+    if not isinstance(envelope, dict):
+        return jsonify({"error": "Invalid JSON envelope."}), 400
+        
+    try:
+        payload = crypto.decrypt_payload(EDGE_CLOUD_KEY, envelope, "edge-gateway-001")
+        crypto.verify_timestamp(payload.get("timestamp", ""))
+    except (ValueError, crypto.InvalidTag) as e:
+        return jsonify({"error": f"Decryption or validation failed: {e}"}), 400
+
+    visitor_name = payload.get("visitor_name", "").strip()
     if not visitor_name:
         return jsonify({"error": "visitor_name is required."}), 400
 
@@ -70,8 +85,12 @@ def verify_visitor():
         )
 
     if authorized:
-        return jsonify({"access_granted": True, "message": "Gate opened"})
-    return jsonify({"access_granted": False, "message": "Access denied"})
+        response_payload = {"access_granted": True, "message": "Gate opened"}
+    else:
+        response_payload = {"access_granted": False, "message": "Access denied"}
+        
+    response_envelope = crypto.encrypt_payload(EDGE_CLOUD_KEY, response_payload, CLOUD_ID)
+    return jsonify(response_envelope)
 
 
 @app.get("/api/analytics/summary")
