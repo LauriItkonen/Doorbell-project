@@ -1,9 +1,9 @@
 """Edge gateway for validating and forwarding doorbell access requests."""
 
+import hashlib
 import json
 from datetime import datetime, timezone
 from pathlib import Path
-import hashlib
 
 import requests
 from flask import Flask, jsonify, request

@@ -9,8 +9,10 @@ import json
 import os
 from datetime import datetime, timezone
 
-from cryptography.exceptions import InvalidTag
+from cryptography.exceptions import InvalidTag as CryptoInvalidTag
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+
+InvalidTag = CryptoInvalidTag
 
 
 def generate_key() -> bytes:

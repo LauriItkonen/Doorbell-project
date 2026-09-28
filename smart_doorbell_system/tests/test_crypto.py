@@ -54,19 +54,18 @@ class CryptoTests(unittest.TestCase):
             self.assertEqual(loaded, self.key)
 
     def test_load_key_from_env_invalid_length(self) -> None:
-        with patch.dict(os.environ, {"TEST_KEY": "deadbeef"}):
-            with self.assertRaises(ValueError):
-                crypto.load_key_from_env("TEST_KEY")
+        with patch.dict(os.environ, {"TEST_KEY": "deadbeef"}), self.assertRaises(ValueError):
+            crypto.load_key_from_env("TEST_KEY")
 
     def test_load_key_from_env_missing(self) -> None:
-        with patch.dict(os.environ, clear=True):
-            with self.assertRaises(ValueError):
-                crypto.load_key_from_env("MISSING_KEY")
+        with patch.dict(os.environ, clear=True), self.assertRaises(ValueError):
+            crypto.load_key_from_env("MISSING_KEY")
 
     def test_load_key_from_env_invalid_hex(self) -> None:
-        with patch.dict(os.environ, {"TEST_KEY": "not-hex-chars"}):
-            with self.assertRaisesRegex(ValueError, "Invalid hex encoding"):
-                crypto.load_key_from_env("TEST_KEY")
+        with patch.dict(os.environ, {"TEST_KEY": "not-hex-chars"}), self.assertRaisesRegex(
+            ValueError, "Invalid hex encoding"
+        ):
+            crypto.load_key_from_env("TEST_KEY")
 
     def test_decrypt_fails_with_invalid_json_plaintext(self) -> None:
         # Encrypt a non-JSON byte string
