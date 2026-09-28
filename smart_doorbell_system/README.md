@@ -20,6 +20,14 @@ smart_doorbell_system/
 |-- edge_requests.log       # created after the gateway receives a request
 ```
 
+## Security Architecture
+
+The system uses hop-by-hop AES-256-GCM encryption for all communication.
+- **Device to Edge:** Secured via `DOORBELL_EDGE_KEY` (32-byte hex).
+- **Edge to Cloud:** Secured via `DOORBELL_CLOUD_KEY` (32-byte hex).
+
+By default, the services will use hardcoded fallback keys if the environment variables are not set.
+
 ## Run locally
 
 From this directory, create and activate a virtual environment if desired, then install dependencies:
