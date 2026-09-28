@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -17,7 +18,7 @@ EDGE_CLOUD_KEY = crypto.load_key_from_env("DOORBELL_CLOUD_KEY", DEFAULT_EDGE_CLO
 EDGE_ID = "edge-gateway-001"
 
 app = Flask(__name__)
-CLOUD_VERIFY_URL = "http://localhost:8000/api/cloud/verify-visitor"
+CLOUD_VERIFY_URL = os.environ.get("CLOUD_VERIFY_URL", "http://localhost:8000/api/cloud/verify-visitor")
 REQUEST_TIMEOUT_SECONDS = 10
 LOG_FILE = Path(__file__).with_name("edge_requests.log")
 
@@ -90,4 +91,4 @@ def access_request():
 
 
 if __name__ == "__main__":
-    app.run(host="localhost", port=5000)
+    app.run(host="0.0.0.0", port=5000)

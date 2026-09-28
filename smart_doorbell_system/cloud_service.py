@@ -1,5 +1,6 @@
 """Cloud verification service backed by SQLite."""
 
+import os
 import sqlite3
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -15,7 +16,8 @@ EDGE_CLOUD_KEY = crypto.load_key_from_env("DOORBELL_CLOUD_KEY", DEFAULT_EDGE_CLO
 CLOUD_ID = "cloud-service"
 
 app = Flask(__name__)
-DATABASE_PATH = Path(__file__).with_name("access_control.db")
+db_path_str = os.environ.get("DATABASE_PATH")
+DATABASE_PATH = Path(db_path_str) if db_path_str else Path(__file__).with_name("access_control.db")
 
 
 @contextmanager
@@ -112,4 +114,4 @@ def analytics_summary():
 
 if __name__ == "__main__":
     initialize_database()
-    app.run(host="localhost", port=8000)
+    app.run(host="0.0.0.0", port=8000)
