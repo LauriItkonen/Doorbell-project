@@ -47,9 +47,9 @@ def access_request():
     try:
         payload = crypto.decrypt_payload(DEVICE_EDGE_KEY, envelope, "doorbell-001")
         crypto.verify_timestamp(payload.get("timestamp", ""))
-    except (ValueError, crypto.InvalidTag) as e:
+    except (ValueError, crypto.InvalidTag):
         write_local_log(envelope, 400)
-        return jsonify({"error": f"Decryption or validation failed: {e}"}), 400
+        return jsonify({"error": "Decryption or validation failed."}), 400
 
     required_fields = ("device_id", "timestamp", "visitor_name")
     if any(

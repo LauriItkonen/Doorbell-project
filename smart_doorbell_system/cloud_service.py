@@ -64,8 +64,8 @@ def verify_visitor():
     try:
         payload = crypto.decrypt_payload(EDGE_CLOUD_KEY, envelope, "edge-gateway-001")
         crypto.verify_timestamp(payload.get("timestamp", ""))
-    except (ValueError, crypto.InvalidTag) as e:
-        return jsonify({"error": f"Decryption or validation failed: {e}"}), 400
+    except (ValueError, crypto.InvalidTag):
+        return jsonify({"error": "Decryption or validation failed."}), 400
 
     visitor_name = payload.get("visitor_name", "").strip()
     if not visitor_name:
