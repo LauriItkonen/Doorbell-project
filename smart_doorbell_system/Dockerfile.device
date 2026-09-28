@@ -1,0 +1,13 @@
+FROM micropython/micropython:latest
+
+WORKDIR /app
+
+# Install MicroPython packages using the built-in mip package manager
+RUN micropython -m mip install urequests
+
+# Copy application files
+COPY micropython_doorbell.py main.py
+COPY device_crypto.py device_crypto.py
+
+# Run the MicroPython entry point
+CMD ["micropython", "main.py"]

@@ -25,5 +25,19 @@ services:
     depends_on:
       - cloud-service
 
+  doorbell-device:
+    build:
+      context: .
+      dockerfile: Dockerfile.device
+    container_name: micropython_doorbell
+    # Required to keep STDIN open for the interactive input() prompts
+    stdin_open: true
+    tty: true
+    environment:
+      - DOORBELL_EDGE_KEY=0101010101010101010101010101010101010101010101010101010101010101
+    # Resolves 'localhost' to the host machine if the gateway runs outside Docker
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
 volumes:
   cloud-data:
