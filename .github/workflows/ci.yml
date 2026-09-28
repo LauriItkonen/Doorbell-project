@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Tests and security checks
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: smart_doorbell_system
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: smart_doorbell_system/requirements.txt
+
+      - name: Install application and CI tools
+        run: python -m pip install -r requirements.txt ruff bandit pip-audit
+
+      - name: Run unit tests
+        run: python -m unittest discover -s tests -v
+
+      - name: Check Python style and common errors
+        run: ruff check .
+
+      - name: Scan Python code for security issues
+        run: bandit -q -r . -ll
+
+      - name: Audit dependencies for known vulnerabilities
+        run: pip-audit -r requirements.txt

@@ -1,21 +1,27 @@
 """Cloud verification service backed by SQLite."""
 
 import sqlite3
+from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
 from flask import Flask, jsonify, request
 
-
 app = Flask(__name__)
 DATABASE_PATH = Path(__file__).with_name("access_control.db")
 
 
-def get_connection() -> sqlite3.Connection:
-    """Open a connection configured to return rows by column name."""
+@contextmanager
+def get_connection() -> Iterator[sqlite3.Connection]:
+    """Open and close a connection configured for named columns."""
     connection = sqlite3.connect(DATABASE_PATH)
     connection.row_factory = sqlite3.Row
-    return connection
+    try:
+        with connection:
+            yield connection
+    finally:
+        connection.close()
 
 
 def initialize_database() -> None:
@@ -52,7 +58,7 @@ def verify_visitor():
 
     with get_connection() as connection:
         authorized = connection.execute(
-            "SELECT 1 FROM authorized_visitors WHERE visitor_name = ?",
+            "SELECT 1 FROM authorized_visitors WHERE visitor_name = ? COLLATE NOCASE",
             (visitor_name,),
         ).fetchone() is not None
         connection.execute(

@@ -7,7 +7,6 @@ from pathlib import Path
 import requests
 from flask import Flask, jsonify, request
 
-
 app = Flask(__name__)
 CLOUD_VERIFY_URL = "http://localhost:8000/api/cloud/verify-visitor"
 REQUEST_TIMEOUT_SECONDS = 10

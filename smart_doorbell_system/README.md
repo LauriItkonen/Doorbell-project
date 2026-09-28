@@ -43,3 +43,19 @@ The device accepts `Alice`, `Bob`, or `Charlie` by default. Type `exit` to stop 
 ```powershell
 curl http://localhost:8000/api/analytics/summary
 ```
+
+## Continuous integration
+
+GitHub Actions runs on every push and pull request. The `CI` workflow runs the
+unit tests, checks Python code with Ruff and Bandit, and audits installed
+dependencies with `pip-audit`. To make successful checks mandatory before a
+pull request can merge, open the repository's **Settings > Rules > Rulesets**
+and require the `Tests and security checks` status check.
+
+These checks are a starting point, not a production security certification.
+They do not provide real visitor identity verification, encrypt visitor names,
+move visitor records into a protected production database, remove the
+hardcoded local service URLs, or provide production-grade availability and
+audit controls. Those require application and deployment changes beyond CI.
+Visitor names are currently stored in SQLite and included in the gateway's
+local request log, so do not use real personal data with this prototype.

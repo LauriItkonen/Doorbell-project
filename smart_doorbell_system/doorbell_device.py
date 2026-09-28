@@ -4,7 +4,6 @@ from datetime import datetime, timezone
 
 import requests
 
-
 GATEWAY_URL = "http://localhost:5000/api/access-request"
 REQUEST_TIMEOUT_SECONDS = 10
 
