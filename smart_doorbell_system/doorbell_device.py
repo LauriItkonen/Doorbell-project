@@ -1,5 +1,6 @@
 """Interactive doorbell and gate device simulator."""
 
+import time
 from datetime import datetime, timezone
 
 import requests
@@ -32,6 +33,7 @@ def main() -> None:
             "visitor_name": visitor_name,
         }
 
+        verification_started_at = time.perf_counter()
         try:
             response = requests.post(
                 GATEWAY_URL, json=payload, timeout=REQUEST_TIMEOUT_SECONDS
@@ -39,12 +41,18 @@ def main() -> None:
             response.raise_for_status()
             result = response.json()
         except requests.RequestException as error:
-            print(f"Gateway unavailable: {error}")
+            elapsed_seconds = time.perf_counter() - verification_started_at
+            print(f"Gateway unavailable after {elapsed_seconds:.3f} seconds: {error}")
             continue
         except ValueError:
-            print("Gateway returned an invalid response.")
+            elapsed_seconds = time.perf_counter() - verification_started_at
+            print(
+                f"Gateway returned an invalid response after {elapsed_seconds:.3f} seconds."
+            )
             continue
 
+        elapsed_seconds = time.perf_counter() - verification_started_at
+        print(f"Verification completed in {elapsed_seconds:.3f} seconds.")
         if result.get("access_granted") is True:
             print(f"🟢 GATE OPENED: Welcome {visitor_name}!")
         else:
