@@ -119,6 +119,28 @@ class CloudServiceTests(unittest.TestCase):
             {"total_attempts": 2, "successful_entries": 1, "denied_entries": 1},
         )
 
+    def test_health_check_healthy(self) -> None:
+        response = self.client.get("/api/health")
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertEqual(data["status"], "healthy")
+        self.assertEqual(data["database"], "connected")
+        self.assertEqual(data["service"], "cloud-service")
+
+    def test_health_check_unhealthy(self) -> None:
+        with patch.object(cloud_service, "get_connection", side_effect=Exception("DB down")):
+            response = self.client.get("/api/health")
+            self.assertEqual(response.status_code, 503)
+            data = response.get_json()
+            self.assertEqual(data["status"], "unhealthy")
+            self.assertEqual(data["database"], "disconnected")
+            self.assertIn("DB down", data["error"])
+
+    def test_metrics_endpoint(self) -> None:
+        response = self.client.get("/metrics")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("flask_http_request_total", response.text)
+
 
 if __name__ == "__main__":
     unittest.main()

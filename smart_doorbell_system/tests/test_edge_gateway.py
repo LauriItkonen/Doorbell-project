@@ -133,6 +133,18 @@ class EdgeGatewayTests(unittest.TestCase):
         self.assertEqual(decrypted["access_granted"], True)
         self.assertEqual(post.call_args.kwargs["timeout"], edge_gateway.REQUEST_TIMEOUT_SECONDS)
 
+    def test_health_check(self) -> None:
+        response = self.client.get("/api/health")
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertEqual(data["status"], "healthy")
+        self.assertEqual(data["service"], "edge-gateway-001")
+
+    def test_metrics_endpoint(self) -> None:
+        response = self.client.get("/metrics")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("flask_http_request_total", response.text)
+
 
 if __name__ == "__main__":
     unittest.main()

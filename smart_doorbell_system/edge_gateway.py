@@ -7,14 +7,19 @@ from pathlib import Path
 
 import requests
 from flask import Flask, jsonify, request
+from prometheus_flask_exporter import PrometheusMetrics
 
 import crypto
+from json_logging import setup_json_logging
 
 DEFAULT_DEVICE_EDGE_KEY_HEX = "01" * 32
 DEVICE_EDGE_KEY = crypto.load_key_from_env("DOORBELL_EDGE_KEY", DEFAULT_DEVICE_EDGE_KEY_HEX)
 EDGE_ID = "edge-gateway-001"
 
+logger = setup_json_logging(EDGE_ID)
+
 app = Flask(__name__)
+metrics = PrometheusMetrics(app)
 CLOUD_BASE_URL = "http://localhost:8000"
 CLOUD_VERIFY_URL = f"{CLOUD_BASE_URL}/api/cloud/verify-visitor"
 CLOUD_PUBLIC_KEY_URL = f"{CLOUD_BASE_URL}/api/cloud/public-key"
@@ -51,18 +56,29 @@ def write_local_log(envelope: dict, status_code: int) -> None:
         log_file.write(json.dumps(entry) + "\n")
 
 
+@app.get("/api/health")
+def health():
+    """Liveness check for edge gateway."""
+    return jsonify({
+        "status": "healthy",
+        "service": EDGE_ID,
+    }), 200
+
+
 @app.post("/api/access-request")
 def access_request():
     """Validate an encrypted device request, ask the cloud service, and relay its result."""
     envelope = request.get_json(silent=True)
     if not isinstance(envelope, dict):
+        logger.warning("Invalid JSON envelope received from device")
         write_local_log({}, 400)
         return jsonify({"error": "Invalid JSON envelope."}), 400
-        
+
     try:
         payload = crypto.decrypt_payload(DEVICE_EDGE_KEY, envelope, "doorbell-001")
         crypto.verify_timestamp(payload.get("timestamp", ""))
-    except (ValueError, crypto.InvalidTag):
+    except (ValueError, crypto.InvalidTag) as e:
+        logger.warning("Decryption or validation failed for device request", extra={"error": str(e)})
         write_local_log(envelope, 400)
         return jsonify({"error": "Decryption or validation failed."}), 400
 
@@ -71,6 +87,10 @@ def access_request():
         not isinstance(payload.get(field), str) or not payload[field].strip()
         for field in required_fields
     ):
+        logger.warning(
+            "Payload missing required fields",
+            extra={"device_id": payload.get("device_id")},
+        )
         error = {"error": "Payload must contain non-empty device_id, timestamp, and visitor_name."}
         write_local_log(envelope, 400)
         return jsonify(error), 400
@@ -95,15 +115,25 @@ def access_request():
         cloud_response.raise_for_status()
         result_envelope = cloud_response.json()
         result = crypto.decrypt_payload(shared_secret, result_envelope, "cloud-service")
-    except requests.RequestException:
+    except requests.RequestException as e:
+        logger.error("Cloud service request failed", extra={"error": str(e)})
         write_local_log(envelope, 502)
         return jsonify({"error": "Cloud service unavailable."}), 502
-    except (ValueError, crypto.InvalidTag):
+    except (ValueError, crypto.InvalidTag) as e:
+        logger.error("Cloud service response invalid or unauthenticated", extra={"error": str(e)})
         write_local_log(envelope, 502)
         return jsonify({"error": "Cloud service returned invalid or unauthenticated response."}), 502
 
+    logger.info(
+        "Forwarded cloud verification outcome",
+        extra={
+            "visitor_name": payload["visitor_name"].strip(),
+            "access_granted": result.get("access_granted"),
+            "cloud_status": cloud_response.status_code,
+        },
+    )
     write_local_log(envelope, cloud_response.status_code)
-    
+
     response_envelope = crypto.encrypt_payload(DEVICE_EDGE_KEY, result, EDGE_ID)
     return jsonify(response_envelope), cloud_response.status_code
 

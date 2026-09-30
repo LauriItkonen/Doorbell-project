@@ -7,16 +7,20 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from flask import Flask, jsonify, request
+from prometheus_flask_exporter import PrometheusMetrics
 
 import crypto
+from json_logging import setup_json_logging
 
 DEFAULT_EDGE_CLOUD_KEY_HEX = "02" * 32
 EDGE_CLOUD_KEY = crypto.load_key_from_env("DOORBELL_CLOUD_KEY", DEFAULT_EDGE_CLOUD_KEY_HEX)
 CLOUD_ID = "cloud-service"
 
+logger = setup_json_logging(CLOUD_ID)
 CLOUD_KEM_PRIV_KEY, CLOUD_KEM_PUB_KEY = crypto.generate_kem_keypair()
 
 app = Flask(__name__)
+metrics = PrometheusMetrics(app)
 DATABASE_PATH = Path(__file__).with_name("access_control.db")
 
 
@@ -54,6 +58,28 @@ def initialize_database() -> None:
             "INSERT OR IGNORE INTO authorized_visitors (visitor_name) VALUES (?)",
             [(name,) for name in ("Alice", "Bob", "Charlie")],
         )
+    logger.info("Database initialized successfully", extra={"database_path": str(DATABASE_PATH)})
+
+
+@app.get("/api/health")
+def health():
+    """Liveness and readiness check verifying database connectivity."""
+    try:
+        with get_connection() as connection:
+            connection.execute("SELECT 1").fetchone()
+        return jsonify({
+            "status": "healthy",
+            "service": CLOUD_ID,
+            "database": "connected",
+        }), 200
+    except Exception as e:
+        logger.exception("Health check failed", extra={"error": str(e)})
+        return jsonify({
+            "status": "unhealthy",
+            "service": CLOUD_ID,
+            "database": "disconnected",
+            "error": str(e),
+        }), 503
 
 
 @app.get("/api/cloud/public-key")
@@ -70,21 +96,28 @@ def verify_visitor():
     """Check authorization, persist the attempt, and return the encrypted decision."""
     envelope = request.get_json(silent=True)
     if not isinstance(envelope, dict):
+        logger.warning("Invalid JSON envelope received")
         return jsonify({"error": "Invalid JSON envelope."}), 400
 
     kem_ciphertext = envelope.get("kem_ciphertext")
     if not kem_ciphertext:
+        logger.warning("Missing kem_ciphertext in envelope")
         return jsonify({"error": "Missing kem_ciphertext."}), 400
 
     try:
         shared_secret = crypto.decapsulate_secret(CLOUD_KEM_PRIV_KEY, kem_ciphertext)
         payload = crypto.decrypt_payload(shared_secret, envelope, "edge-gateway-001")
         crypto.verify_timestamp(payload.get("timestamp", ""))
-    except (ValueError, crypto.InvalidTag):
+    except (ValueError, crypto.InvalidTag) as e:
+        logger.warning(
+            "Decryption or validation failed",
+            extra={"sender_id": envelope.get("sender_id"), "error": str(e)},
+        )
         return jsonify({"error": "Decryption or validation failed."}), 400
 
     visitor_name = payload.get("visitor_name", "").strip()
     if not visitor_name:
+        logger.warning("Missing or empty visitor_name")
         return jsonify({"error": "visitor_name is required."}), 400
 
     with get_connection() as connection:
@@ -99,6 +132,11 @@ def verify_visitor():
             """,
             (datetime.now(timezone.utc).isoformat(), visitor_name, int(authorized)),
         )
+
+    logger.info(
+        "Processed visitor verification",
+        extra={"visitor_name": visitor_name, "access_granted": authorized},
+    )
 
     if authorized:
         response_payload = {"access_granted": True, "message": "Gate opened"}
