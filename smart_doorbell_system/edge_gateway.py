@@ -12,14 +12,29 @@ import crypto
 
 DEFAULT_DEVICE_EDGE_KEY_HEX = "01" * 32
 DEVICE_EDGE_KEY = crypto.load_key_from_env("DOORBELL_EDGE_KEY", DEFAULT_DEVICE_EDGE_KEY_HEX)
-DEFAULT_EDGE_CLOUD_KEY_HEX = "02" * 32
-EDGE_CLOUD_KEY = crypto.load_key_from_env("DOORBELL_CLOUD_KEY", DEFAULT_EDGE_CLOUD_KEY_HEX)
 EDGE_ID = "edge-gateway-001"
 
 app = Flask(__name__)
-CLOUD_VERIFY_URL = "http://localhost:8000/api/cloud/verify-visitor"
+CLOUD_BASE_URL = "http://localhost:8000"
+CLOUD_VERIFY_URL = f"{CLOUD_BASE_URL}/api/cloud/verify-visitor"
+CLOUD_PUBLIC_KEY_URL = f"{CLOUD_BASE_URL}/api/cloud/public-key"
 REQUEST_TIMEOUT_SECONDS = 10
 LOG_FILE = Path(__file__).with_name("edge_requests.log")
+
+_cached_cloud_pub_key = None
+
+
+def get_cloud_public_key(force_refresh: bool = False):
+    """Fetch and cache the Cloud Service's ML-KEM public key."""
+    global _cached_cloud_pub_key
+    if _cached_cloud_pub_key is None or force_refresh:
+        response = requests.get(CLOUD_PUBLIC_KEY_URL, timeout=REQUEST_TIMEOUT_SECONDS)
+        response.raise_for_status()
+        data = response.json()
+        if not isinstance(data, dict) or "public_key" not in data:
+            raise ValueError("Invalid public key response from cloud service.")
+        _cached_cloud_pub_key = crypto.import_kem_public_key(data["public_key"])
+    return _cached_cloud_pub_key
 
 
 def write_local_log(envelope: dict, status_code: int) -> None:
@@ -66,8 +81,12 @@ def access_request():
             "timestamp": payload["timestamp"],
             "visitor_name": payload["visitor_name"].strip(),
         }
-        cloud_envelope = crypto.encrypt_payload(EDGE_CLOUD_KEY, cloud_payload, EDGE_ID)
-        
+        cloud_pub_key = get_cloud_public_key()
+        kem_ciphertext, shared_secret = crypto.encapsulate_secret(cloud_pub_key)
+
+        cloud_envelope = crypto.encrypt_payload(shared_secret, cloud_payload, EDGE_ID)
+        cloud_envelope["kem_ciphertext"] = kem_ciphertext
+
         cloud_response = requests.post(
             CLOUD_VERIFY_URL,
             json=cloud_envelope,
@@ -75,7 +94,7 @@ def access_request():
         )
         cloud_response.raise_for_status()
         result_envelope = cloud_response.json()
-        result = crypto.decrypt_payload(EDGE_CLOUD_KEY, result_envelope, "cloud-service")
+        result = crypto.decrypt_payload(shared_secret, result_envelope, "cloud-service")
     except requests.RequestException:
         write_local_log(envelope, 502)
         return jsonify({"error": "Cloud service unavailable."}), 502

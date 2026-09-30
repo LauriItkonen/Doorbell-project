@@ -30,8 +30,19 @@ class CloudServiceTests(unittest.TestCase):
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "visitor_name": visitor_name,
         }
-        envelope = crypto.encrypt_payload(cloud_service.EDGE_CLOUD_KEY, payload, "edge-gateway-001")
-        return self.client.post("/api/cloud/verify-visitor", json=envelope)
+        kem_ct, shared_secret = crypto.encapsulate_secret(cloud_service.CLOUD_KEM_PUB_KEY)
+        envelope = crypto.encrypt_payload(shared_secret, payload, "edge-gateway-001")
+        envelope["kem_ciphertext"] = kem_ct
+        return self.client.post("/api/cloud/verify-visitor", json=envelope), shared_secret
+
+    def test_public_key_endpoint(self) -> None:
+        response = self.client.get("/api/cloud/public-key")
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertEqual(data["sender_id"], "cloud-service")
+        self.assertIn("public_key", data)
+        pub_key = crypto.import_kem_public_key(data["public_key"])
+        self.assertIsNotNone(pub_key)
 
     def test_name_variations_are_checked_against_authorized_visitors(self) -> None:
         cases = (
@@ -44,18 +55,18 @@ class CloudServiceTests(unittest.TestCase):
 
         for visitor_name, expected_access in cases:
             with self.subTest(visitor_name=visitor_name):
-                response = self._make_request(visitor_name)
+                response, shared_secret = self._make_request(visitor_name)
 
                 self.assertEqual(response.status_code, 200)
                 
                 response_envelope = response.get_json()
-                decrypted = crypto.decrypt_payload(cloud_service.EDGE_CLOUD_KEY, response_envelope, "cloud-service")
+                decrypted = crypto.decrypt_payload(shared_secret, response_envelope, "cloud-service")
                 self.assertEqual(decrypted["access_granted"], expected_access)
 
     def test_empty_and_whitespace_names_are_rejected(self) -> None:
         for visitor_name in ("", "   "):
             with self.subTest(visitor_name=visitor_name):
-                response = self._make_request(visitor_name)
+                response, _ = self._make_request(visitor_name)
 
                 self.assertEqual(response.status_code, 400)
 
@@ -64,22 +75,35 @@ class CloudServiceTests(unittest.TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertIn("error", response.get_json())
 
+    def test_missing_kem_ciphertext_is_rejected(self) -> None:
+        payload = {
+            "device_id": "test-device",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "visitor_name": "Alice",
+        }
+        envelope = crypto.encrypt_payload(crypto.generate_key(), payload, "edge-gateway-001")
+        response = self.client.post("/api/cloud/verify-visitor", json=envelope)
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("Missing kem_ciphertext", response.get_json()["error"])
+
     def test_decryption_failure_is_rejected(self) -> None:
         payload = {
             "device_id": "test-device",
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "visitor_name": "Alice",
         }
-        # Use wrong key to trigger InvalidTag
-        wrong_key = crypto.generate_key()
-        envelope = crypto.encrypt_payload(wrong_key, payload, "edge-gateway-001")
-        
+        # Encapsulate with a DIFFERENT keypair to cause decapsulation/decryption mismatch
+        _, diff_pub = crypto.generate_kem_keypair()
+        kem_ct, shared_secret = crypto.encapsulate_secret(diff_pub)
+        envelope = crypto.encrypt_payload(shared_secret, payload, "edge-gateway-001")
+        envelope["kem_ciphertext"] = kem_ct
+
         response = self.client.post("/api/cloud/verify-visitor", json=envelope)
         self.assertEqual(response.status_code, 400)
         self.assertIn("Decryption or validation failed", response.get_json()["error"])
 
     def test_missing_name_is_rejected(self) -> None:
-        response = self._make_request("")
+        response, _ = self._make_request("")
         self.assertEqual(response.status_code, 400)
         self.assertIn("error", response.get_json())
 

@@ -14,6 +14,8 @@ DEFAULT_EDGE_CLOUD_KEY_HEX = "02" * 32
 EDGE_CLOUD_KEY = crypto.load_key_from_env("DOORBELL_CLOUD_KEY", DEFAULT_EDGE_CLOUD_KEY_HEX)
 CLOUD_ID = "cloud-service"
 
+CLOUD_KEM_PRIV_KEY, CLOUD_KEM_PUB_KEY = crypto.generate_kem_keypair()
+
 app = Flask(__name__)
 DATABASE_PATH = Path(__file__).with_name("access_control.db")
 
@@ -54,15 +56,29 @@ def initialize_database() -> None:
         )
 
 
+@app.get("/api/cloud/public-key")
+def public_key():
+    """Return the cloud service's serialized ML-KEM public key."""
+    return jsonify({
+        "sender_id": CLOUD_ID,
+        "public_key": crypto.export_kem_public_key(CLOUD_KEM_PUB_KEY),
+    })
+
+
 @app.post("/api/cloud/verify-visitor")
 def verify_visitor():
     """Check authorization, persist the attempt, and return the encrypted decision."""
     envelope = request.get_json(silent=True)
     if not isinstance(envelope, dict):
         return jsonify({"error": "Invalid JSON envelope."}), 400
-        
+
+    kem_ciphertext = envelope.get("kem_ciphertext")
+    if not kem_ciphertext:
+        return jsonify({"error": "Missing kem_ciphertext."}), 400
+
     try:
-        payload = crypto.decrypt_payload(EDGE_CLOUD_KEY, envelope, "edge-gateway-001")
+        shared_secret = crypto.decapsulate_secret(CLOUD_KEM_PRIV_KEY, kem_ciphertext)
+        payload = crypto.decrypt_payload(shared_secret, envelope, "edge-gateway-001")
         crypto.verify_timestamp(payload.get("timestamp", ""))
     except (ValueError, crypto.InvalidTag):
         return jsonify({"error": "Decryption or validation failed."}), 400
@@ -88,8 +104,8 @@ def verify_visitor():
         response_payload = {"access_granted": True, "message": "Gate opened"}
     else:
         response_payload = {"access_granted": False, "message": "Access denied"}
-        
-    response_envelope = crypto.encrypt_payload(EDGE_CLOUD_KEY, response_payload, CLOUD_ID)
+
+    response_envelope = crypto.encrypt_payload(shared_secret, response_payload, CLOUD_ID)
     return jsonify(response_envelope)
 
 
