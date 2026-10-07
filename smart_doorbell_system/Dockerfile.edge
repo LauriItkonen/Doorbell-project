@@ -5,10 +5,10 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt -t /app/deps
 
 # Final stage
-FROM gcr.io/distroless/python3-debian12
+FROM python:3.12-slim
 WORKDIR /app
 COPY --from=builder /app/deps /app/deps
 ENV PYTHONPATH=/app/deps
 COPY edge_gateway.py crypto.py ./
 EXPOSE 5000
-CMD ["edge_gateway.py"]
+CMD ["python", "edge_gateway.py"]
