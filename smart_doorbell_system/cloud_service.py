@@ -81,7 +81,7 @@ def health():
             "status": "unhealthy",
             "service": CLOUD_ID,
             "database": "disconnected",
-            "error": str(e),
+            "error": "Database connectivity check failed.",
         }), 503
 
 
