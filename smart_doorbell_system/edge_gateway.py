@@ -19,6 +19,7 @@ EDGE_ID = "edge-gateway-001"
 
 app = Flask(__name__)
 CLOUD_VERIFY_URL = os.environ.get("CLOUD_VERIFY_URL", "http://localhost:8000/api/cloud/verify-visitor")
+HOST = os.environ.get("DOORBELL_HOST", "127.0.0.1")
 REQUEST_TIMEOUT_SECONDS = 10
 LOG_FILE = Path(__file__).with_name("edge_requests.log")
 
@@ -91,4 +92,4 @@ def access_request():
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
+    app.run(host=HOST, port=5000)

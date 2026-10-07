@@ -11,6 +11,7 @@ services:
       - DATABASE_PATH=/data/access_control.db
       # Using default 32-byte hex fallback keys from the code
       - DOORBELL_CLOUD_KEY=0202020202020202020202020202020202020202020202020202020202020202
+      - DOORBELL_HOST=0.0.0.0
 
   edge-gateway:
     build:
@@ -22,6 +23,7 @@ services:
       - CLOUD_VERIFY_URL=http://cloud-service:8000/api/cloud/verify-visitor
       - DOORBELL_EDGE_KEY=0101010101010101010101010101010101010101010101010101010101010101
       - DOORBELL_CLOUD_KEY=0202020202020202020202020202020202020202020202020202020202020202
+      - DOORBELL_HOST=0.0.0.0
     depends_on:
       - cloud-service
 

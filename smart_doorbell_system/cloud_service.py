@@ -18,6 +18,7 @@ CLOUD_ID = "cloud-service"
 app = Flask(__name__)
 db_path_str = os.environ.get("DATABASE_PATH")
 DATABASE_PATH = Path(db_path_str) if db_path_str else Path(__file__).with_name("access_control.db")
+HOST = os.environ.get("DOORBELL_HOST", "127.0.0.1")
 
 
 @contextmanager
@@ -114,4 +115,4 @@ def analytics_summary():
 
 if __name__ == "__main__":
     initialize_database()
-    app.run(host="0.0.0.0", port=8000)
+    app.run(host=HOST, port=8000)
