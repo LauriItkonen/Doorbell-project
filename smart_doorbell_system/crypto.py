@@ -10,9 +10,72 @@ import os
 from datetime import datetime, timezone
 
 from cryptography.exceptions import InvalidTag as CryptoInvalidTag
+from cryptography.hazmat.primitives.asymmetric import mlkem
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 InvalidTag = CryptoInvalidTag
+
+
+def generate_kem_keypair() -> tuple[mlkem.MLKEM768PrivateKey, mlkem.MLKEM768PublicKey]:
+    """Generate an ML-KEM-768 (FIPS 203) keypair."""
+    priv = mlkem.MLKEM768PrivateKey.generate()
+    return priv, priv.public_key()
+
+
+def export_kem_public_key(pub_key: mlkem.MLKEM768PublicKey) -> str:
+    """Serialize an ML-KEM-768 public key to a base64 string."""
+    return base64.b64encode(pub_key.public_bytes_raw()).decode("utf-8")
+
+
+def import_kem_public_key(pub_key_b64: str) -> mlkem.MLKEM768PublicKey:
+    """Deserialize an ML-KEM-768 public key from a base64 string.
+
+    Args:
+        pub_key_b64: Base64-encoded raw public key bytes.
+
+    Returns:
+        The deserialized MLKEM768PublicKey object.
+
+    Raises:
+        ValueError: If base64 decoding fails or key bytes are invalid.
+    """
+    try:
+        raw_bytes = base64.b64decode(pub_key_b64)
+        return mlkem.MLKEM768PublicKey.from_public_bytes(raw_bytes)
+    except Exception as e:
+        raise ValueError(f"Invalid ML-KEM public key: {e}") from e
+
+
+def encapsulate_secret(pub_key: mlkem.MLKEM768PublicKey) -> tuple[str, bytes]:
+    """Encapsulate a 32-byte shared secret using the recipient's ML-KEM public key.
+
+    Returns:
+        A tuple of (kem_ciphertext_b64, shared_secret_bytes).
+    """
+    shared_secret, ciphertext = pub_key.encapsulate()
+    kem_ciphertext_b64 = base64.b64encode(ciphertext).decode("utf-8")
+    return kem_ciphertext_b64, shared_secret
+
+
+def decapsulate_secret(priv_key: mlkem.MLKEM768PrivateKey, kem_ciphertext_b64: str) -> bytes:
+    """Decapsulate a shared secret using the recipient's ML-KEM private key.
+
+    Args:
+        priv_key: The recipient's MLKEM768PrivateKey.
+        kem_ciphertext_b64: The base64-encoded KEM ciphertext.
+
+    Returns:
+        The 32-byte shared secret.
+
+    Raises:
+        ValueError: If base64 decoding fails or decapsulation fails.
+    """
+    try:
+        ciphertext = base64.b64decode(kem_ciphertext_b64)
+        return priv_key.decapsulate(ciphertext)
+    except Exception as e:
+        raise ValueError(f"Failed to decapsulate ML-KEM ciphertext: {e}") from e
+
 
 
 def generate_key() -> bytes:
