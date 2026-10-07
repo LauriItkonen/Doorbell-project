@@ -9,6 +9,6 @@ FROM python:3.12-slim
 WORKDIR /app
 COPY --from=builder /app/deps /app/deps
 ENV PYTHONPATH=/app/deps
-COPY edge_gateway.py crypto.py ./
+COPY edge_gateway.py crypto.py json_logging.py ./
 EXPOSE 5000
 CMD ["python", "edge_gateway.py"]
