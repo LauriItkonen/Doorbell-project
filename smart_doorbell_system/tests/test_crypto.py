@@ -100,6 +100,42 @@ class CryptoTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Invalid timestamp"):
             crypto.verify_timestamp("not-a-timestamp")
 
+    def test_kem_keypair_generation(self) -> None:
+        priv, pub = crypto.generate_kem_keypair()
+        self.assertIsNotNone(priv)
+        self.assertIsNotNone(pub)
+
+    def test_kem_export_import_public_key_roundtrip(self) -> None:
+        _, pub = crypto.generate_kem_keypair()
+        pub_b64 = crypto.export_kem_public_key(pub)
+        self.assertIsInstance(pub_b64, str)
+        imported_pub = crypto.import_kem_public_key(pub_b64)
+        self.assertIsNotNone(imported_pub)
+
+    def test_kem_import_invalid_public_key(self) -> None:
+        with self.assertRaisesRegex(ValueError, "Invalid ML-KEM public key"):
+            crypto.import_kem_public_key("invalid-base64!!!")
+
+        with self.assertRaisesRegex(ValueError, "Invalid ML-KEM public key"):
+            crypto.import_kem_public_key(crypto.base64.b64encode(b"short").decode("utf-8"))
+
+    def test_kem_encapsulate_decapsulate_roundtrip(self) -> None:
+        priv, pub = crypto.generate_kem_keypair()
+        ct_b64, shared_secret_sender = crypto.encapsulate_secret(pub)
+        self.assertEqual(len(shared_secret_sender), 32)
+        self.assertIsInstance(ct_b64, str)
+
+        shared_secret_recipient = crypto.decapsulate_secret(priv, ct_b64)
+        self.assertEqual(shared_secret_sender, shared_secret_recipient)
+
+    def test_kem_decapsulate_invalid_ciphertext(self) -> None:
+        priv, _ = crypto.generate_kem_keypair()
+        with self.assertRaisesRegex(ValueError, "Failed to decapsulate"):
+            crypto.decapsulate_secret(priv, "invalid-base64!!!")
+
+        with self.assertRaisesRegex(ValueError, "Failed to decapsulate"):
+            crypto.decapsulate_secret(priv, crypto.base64.b64encode(b"short").decode("utf-8"))
+
 
 if __name__ == "__main__":
     unittest.main()
