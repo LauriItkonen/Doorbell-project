@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -20,9 +21,10 @@ logger = setup_json_logging(EDGE_ID)
 
 app = Flask(__name__)
 metrics = PrometheusMetrics(app)
-CLOUD_BASE_URL = "http://localhost:8000"
-CLOUD_VERIFY_URL = f"{CLOUD_BASE_URL}/api/cloud/verify-visitor"
-CLOUD_PUBLIC_KEY_URL = f"{CLOUD_BASE_URL}/api/cloud/public-key"
+CLOUD_BASE_URL = os.environ.get("CLOUD_BASE_URL", "http://localhost:8000")
+CLOUD_VERIFY_URL = os.environ.get("CLOUD_VERIFY_URL", f"{CLOUD_BASE_URL}/api/cloud/verify-visitor")
+CLOUD_PUBLIC_KEY_URL = os.environ.get("CLOUD_PUBLIC_KEY_URL", f"{CLOUD_BASE_URL}/api/cloud/public-key")
+HOST = os.environ.get("DOORBELL_HOST", "127.0.0.1")
 REQUEST_TIMEOUT_SECONDS = 10
 LOG_FILE = Path(__file__).with_name("edge_requests.log")
 
@@ -139,4 +141,4 @@ def access_request():
 
 
 if __name__ == "__main__":
-    app.run(host="localhost", port=5000)
+    app.run(host=HOST, port=5000)

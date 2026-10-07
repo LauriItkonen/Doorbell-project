@@ -134,7 +134,7 @@ class CloudServiceTests(unittest.TestCase):
             data = response.get_json()
             self.assertEqual(data["status"], "unhealthy")
             self.assertEqual(data["database"], "disconnected")
-            self.assertIn("DB down", data["error"])
+            self.assertEqual(data["error"], "Database connectivity check failed.")
 
     def test_metrics_endpoint(self) -> None:
         response = self.client.get("/metrics")

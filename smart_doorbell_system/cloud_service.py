@@ -1,5 +1,6 @@
 """Cloud verification service backed by SQLite."""
 
+import os
 import sqlite3
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -21,7 +22,9 @@ CLOUD_KEM_PRIV_KEY, CLOUD_KEM_PUB_KEY = crypto.generate_kem_keypair()
 
 app = Flask(__name__)
 metrics = PrometheusMetrics(app)
-DATABASE_PATH = Path(__file__).with_name("access_control.db")
+db_path_str = os.environ.get("DATABASE_PATH")
+DATABASE_PATH = Path(db_path_str) if db_path_str else Path(__file__).with_name("access_control.db")
+HOST = os.environ.get("DOORBELL_HOST", "127.0.0.1")
 
 
 @contextmanager
@@ -78,7 +81,7 @@ def health():
             "status": "unhealthy",
             "service": CLOUD_ID,
             "database": "disconnected",
-            "error": str(e),
+            "error": "Database connectivity check failed.",
         }), 503
 
 
@@ -166,4 +169,4 @@ def analytics_summary():
 
 if __name__ == "__main__":
     initialize_database()
-    app.run(host="localhost", port=8000)
+    app.run(host=HOST, port=8000)
